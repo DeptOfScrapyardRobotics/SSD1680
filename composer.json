@@ -1,44 +1,44 @@
 {
     "name": "dept-of-scrapyard-robotics/ssd1680",
-    "description": "ScrapyardIO Framework extension library that enables SPI Control of SSD1680 eInk Displays on Linux",
+    "description": "Drive SSD1680 ePaper Displays over SPI with PHP",
     "type": "library",
-    "version": "0.2.0",
+    "version": "0.4.0",
     "keywords": [
-        "laravel",
-        "io",
-        "linux",
-        "embedded",
-        "spi",
-        "ssd1680"
+        "framework",
+        "scrapyard-io"
     ],
     "license": "MIT",
+    "homepage": "https://dosr.projectsaturnstudios.com",
     "authors": [
         {
-            "name": "Project Saturn Studios, LLC",
+            "name": "Angel Gonzalez",
             "email": "angel@projectsaturnstudios.com"
         }
     ],
     "require": {
         "php": "^8.3",
-        "dept-of-scrapyard-robotics/ink": "^0.2.0",
-        "dept-of-scrapyard-robotics/displays": "^0.2.0"
+        "scrapyard-io/waveforms": "^0.4.0",
+        "scrapyard-io/reality-interface": "^0.4.0",
+        "scrapyard-io/bare-metal": "^0.4.0"
     },
-    "require-dev": {
-        "mockery/mockery": "^1.6",
-        "orchestra/testbench": "*",
-        "pestphp/pest": "^4.0",
-        "pestphp/pest-plugin-laravel": "^4.0",
-        "phpunit/phpunit": "^12.0"
+    "suggest": {
+        "scrapyard-io/gpio": "^0.4.0 - For direct linux-based GPIO",
+        "scrapyard-io/spi": "^0.4.0 - For direct linux-based SPI",
+        "scrapyard-io/mpsse": "^0.4.0 - For I2C/SPI/GPIO over an FTDI Serial-to-USB Device"
     },
     "autoload": {
         "psr-4": {
-            "ScrapyardIO\\Libraries\\Displays\\Drivers\\SSD1680\\": "src"
+            "DeptOfScrapyardRobotics\\Displays\\SSD1680\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Tests\\": "tests"
+            "DeptOfScrapyardRobotics\\Tests\\": "tests/"
         }
     },
-    "minimum-stability": "stable"
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }

@@ -1,8 +1,8 @@
 <?php
 
-namespace ScrapyardIO\Libraries\Displays\Drivers\SSD1680\Enums;
+namespace DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\Enums;
 
-enum SSD1680CommandRegister: int
+enum SSD1680OpCode: int
 {
     case DRIVER_OUTPUT_CONTROL = 0x01;
     case GATE_DRIVING_VOLTAGE_CONTROL = 0x03;
@@ -54,6 +54,5 @@ enum SSD1680CommandRegister: int
     case AUTO_WRITE_BLACK_RAM = 0x47;
     case SET_RAM_X_ADDRESS_COUNTER = 0x4E;
     case SET_RAM_Y_ADDRESS_COUNTER = 0x4F;
-    case NO_OP  = 0x7F;
+    case NO_OP = 0x7F;
 }
-
