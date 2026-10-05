@@ -1,10 +1,14 @@
 {
     "name": "dept-of-scrapyard-robotics/ssd1680",
-    "description": "Drive SSD1680 ePaper Displays over SPI with PHP",
+    "description": "Drive SSD1680 black/white and black/white/red ePaper panels over SPI with the ScrapyardIO GPIO framework.",
     "type": "library",
-    "version": "0.4.3",
+    "version": "0.10.0",
     "keywords": [
-        "framework",
+        "ssd1680",
+        "epaper",
+        "e-ink",
+        "display",
+        "spi",
         "scrapyard-io"
     ],
     "license": "MIT",
@@ -16,15 +20,24 @@
         }
     ],
     "require": {
-        "php": "^8.3",
-        "scrapyard-io/waveforms": "^0.4.0",
-        "scrapyard-io/reality-interface": "^0.4.0",
-        "scrapyard-io/bare-metal": "^0.4.0"
+        "php": "^8.4|^8.5|^8.6",
+        "gpio/contracts": "^0.10.0",
+        "gpio/integrated-circuits": "^0.10.0",
+        "venusian-surface/contracts": "^0.10.0",
+        "venusian-voyager/nuts-and-bolts": "^0.10.0",
+        "venusian-voyager/vessel": "^0.10.0"
+    },
+    "require-dev": {
+        "gpio/digital": "^0.10.0",
+        "gpio/spi": "^0.10.0",
+        "pestphp/pest": "^4",
+        "venusian-voyager/config": "^0.10.0"
     },
     "suggest": {
-        "scrapyard-io/gpio": "^0.4.0 - For direct linux-based GPIO",
-        "scrapyard-io/spi": "^0.4.0 - For direct linux-based SPI",
-        "scrapyard-io/mpsse": "^0.4.0 - For I2C/SPI/GPIO over an FTDI Serial-to-USB Device"
+        "gpio/digital": "^0.10.0 - DC, RST, BUSY and PWR pins for SSD1680SPITransport",
+        "gpio/spi": "^0.10.0 - SPI connections for SSD1680SPITransport",
+        "microscrap/scrapyard-linux": "^0.10.0 - native spidev and libgpiod drivers",
+        "microscrap/scrapyard-usb": "^0.10.0 - MPSSE SPI and pins over FTDI"
     },
     "autoload": {
         "psr-4": {
@@ -33,11 +46,24 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "DeptOfScrapyardRobotics\\Tests\\": "tests/"
+            "DeptOfScrapyardRobotics\\Displays\\SSD1680\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.10.x-dev"
+        },
+        "venusian": {
+            "providers": [
+                "DeptOfScrapyardRobotics\\Displays\\SSD1680\\Providers\\SSD1680ServiceProvider"
+            ]
         }
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
     },
     "minimum-stability": "dev",
     "prefer-stable": true

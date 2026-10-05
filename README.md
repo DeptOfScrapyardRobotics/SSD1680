@@ -1,230 +1,241 @@
-Introduction
-============
+# ssd1680
 
-PHP Package for the SSD1680 ePaper (electronic ink) display controller. The
-SSD1680 drives both black/white panels and black/white/red tri-color panels
-from the same driver, writing each color to its own RAM plane.
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/dept-of-scrapyard-robotics/ssd1680.svg)](https://packagist.org/packages/dept-of-scrapyard-robotics/ssd1680)
+[![License](https://img.shields.io/packagist/l/dept-of-scrapyard-robotics/ssd1680.svg)](LICENSE)
 
-Compatible SPI Interfaces
-===============
-The SSD1680 display communicates with your device over SPI, the Serial Peripheral Interface.
+Drive SSD1680 ePaper panels from PHP over SPI, black/white and black/white/red, using the ScrapyardIO GPIO framework.
 
-You can interface with displays such as the SSD1680 with this package the following ways:
-* A Linux Single-Board Computer's exposed GPIO pins using the dedicated SPI MOSI/SCK and CS pins as well as GPIO pins for DC, RST and BUSY.
-* An MPSSE-enabled USB-to-Serial device such as an FT232H generally using D0 and SCK, D1 for MOSI, D2 for MISO and D3 for CS, plus GPIO for RST/DC/BUSY and connected to nearly any Linux or MacOS USB port.
+`dept-of-scrapyard-robotics/ssd1680` powers and boots the controller, writes your frames into its RAM a window at a time, and refreshes the panel: a full refresh on either kind, and a fast partial refresh on black/white panels. You describe the wiring in a config file, ask the circuit catalog for the panel, and send it bytes packed the way its `formatSpec()` describes, which is what a Surface ePaper framebuffer produces.
 
-A BUSY input is required, the same as DC and RST. ePaper refreshes take seconds,
-and the driver blocks on the BUSY line to know when the panel has finished.
+```
+ext-posi / ext-ftdi            1:1 system and libftdi calls
+  → microscrap/*               libgpiod, spidev, libmpsse in PHP
+    → microscrap/scrapyard-*   adapters: the `native` and `usb` drivers
+      → scrapyard-io/framework protocol managers, transports, the circuit catalog
+        → dept-of-scrapyard-robotics/ssd1680   ← this package
+```
 
-Dependencies
-=============
-This package makes use of modules within:
-* [The ScrapyardIO Framework](https://github.com/ScrapyardIO/framework)
+| Panel | Class | Catalog slug | Refresh |
+|---|---|---|---|
+| black/white | `SSD1680BW` | `ssd1680-bw` | full, partial |
+| black/white/red | `SSD1680BWR` | `ssd1680-bwr` | full (about 18 s) |
 
-This package also requires one of the following extensions in order to interface with SPI
-* [POSI Extension v^0.4.0 or newer](https://github.com/php-io-extensions/posi)
-* [FTDI Extension v^0.4.0 or newer](https://github.com/php-io-extensions/ftdi)
+## Requirements
 
-In addition, an extension wrapper package is needed
+- PHP 8.4 or newer
+- A Venusian 0.10 application with the `scrapyard-io/framework` 0.10 components (`gpio/spi`, `gpio/digital`, `gpio/integrated-circuits`)
+- `venusian-surface/contracts` 0.10, for the `FormatSpec` the panel describes its bytes with
+- An adapter for your hardware:
+  - `microscrap/scrapyard-linux` (driver `native`) for a Raspberry Pi or other Linux board: `spidev` and `libgpiod`, needs `ext-posi`
+  - `microscrap/scrapyard-usb` (driver `usb`) for FTDI MPSSE boards such as the FT232H, needs `ext-ftdi`
+- `venusian-surface/framebuffers` 0.10 if you want Surface to pack your frames
 
-For ext-posi
-* [Microscrap POSIX Package v0.4.0 or newer](https://github.com/microscrap/posix)
-* [Microscrap Native SPI Package v0.4.0 or newer](https://github.com/microscrap/spi)
-* [Microscrap Native GPIO Package v0.4.0 or newer](https://github.com/microscrap/gpio)
+## Installation
 
-For ext-ftdi
-* [Microscrap FTDI Package v0.4.0 or newer](https://github.com/microscrap/ftdi)
-* [Microscrap MPSSE Package v0.4.0 or newer](https://github.com/microscrap/mpsse)
-
-Installing from Composer
-====================
-Inside the root of your PHP Project, simply require the SSD1680 package from composer
-```shell
+```bash
 composer require dept-of-scrapyard-robotics/ssd1680
 ```
-Framework Configuration
-====================
-If you would like to use the ScrapyardIO Framework to bootstrap your display without
-wasting lines configuring your display right in the script you can add your desired
-configuration to scrapyard-io.php, such as in this example:
 
-### SPI
+The service provider is discovered automatically. It merges the package's wiring configs under `circuits.ssd1680-bw` and `circuits.ssd1680-bwr`, and registers both panel kinds with the circuit catalog. To publish the configs into your app, run:
+
+```bash
+php computer vendor:publish --tag=ssd1680-config
+```
+
+That writes `config/circuits/ssd1680-bw.php` and `config/circuits/ssd1680-bwr.php`, each with `driver => 'none'` until you fill in your bench.
+
+## Quick start
+
+The LAFVIN 2.13 inch e-Paper HAT (250 × 122, black/white) on a Raspberry Pi. Its pins, shared by Waveshare's 2.13 inch HATs including the black/white/red (B) V4: DC on GPIO25, RST on GPIO17, BUSY on GPIO24, chip select on CE0, and a power switch on GPIO18 that must be driven high.
+
 ```php
-
-use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\SSD1680;
-
+// config/circuits/ssd1680-bw.php
 return [
-    'displays' => [
-        // For Native Configurations 
-        'ssd1680-native' => [
-            'class_name' => SSD1680::class,
-            'connection' => ['driver' => 'native'],
-            'startup' => [
-                'spi' => [0, 0],
-                'gpiochip' => [0],
-                'rst' => [24],
-                'dc' => [22],
-                'busy' => [17],
-            ],
+    'default_config' => 'spi',
+    'configs' => [
+        'spi' => [
+            'driver' => 'native',
+            'device' => 0,
+            'chip_select' => 0,
+            'dc' => ['driver' => 'native', 'device' => 0, 'pin' => 25],
+            'rst' => ['driver' => 'native', 'device' => 0, 'pin' => 17],
+            'busy' => ['driver' => 'native', 'device' => 0, 'pin' => 24],
+            'pwr' => ['enabled' => true, 'driver' => 'native', 'device' => 0, 'pin' => 18],
         ],
-        // For USB Configurations
-        'ssd1680-usb' => [
-            'class_name' => SSD1680::class,
-            'connection' => ['driver' => 'usb'],
-            'startup' => [
-                'spi' => ['ft232h', 0],
-                'gpiochip' => ['ft232h'],
-                'rst' => [0],
-                'dc' => [1],
-                'busy' => [2],
-            ],
-        ],        
-    ]
+    ],
 ];
 ```
 
-Basic Usage
-============
-
-### Native (POSIX) SPI driver. (Single Board Computers)
 ```php
+use Surface\Framebuffers\Native\NativeFramebufferDriver;
 
-use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\SSD1680;
+$panel = app('circuit')->conjure('ssd1680-bw');   // powered, reset and booted
 
-$native_spi_display = SSD1680::connection('native')
-    ->spi(0, 0)
-    ->gpiochip(0)
-    ->rst(24)
-    ->dc(22)
-    ->busy(17)
-    ->create()
+$spec = $panel->formatSpec();
+$fb = (new NativeFramebufferDriver)->epaper($spec, $panel->width(), $panel->height());   // starts white
+$fb->writeRgba8($rgba, $panel->width(), $panel->height());                              // any RGBA8 image
+
+$panel->transmit(0, 0, $fb->flush($spec, true));
+$panel->refresh();
 ```
 
-### USB (MPSSE) driver using SPI. (Linux and MacOS)
-```php
+The panel is 122 pixels along its sources and 250 along its gates, so it's driven as 122 wide and 250 tall; rotate your image for landscape. Booting takes about 60 ms, and a full refresh about 2.3 seconds.
 
-use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\SSD1680;
+## Connecting
 
-$usb_spi_display = SSD1680::connection('usb')
-    ->spi('ft232h', 0)
-    ->gpiochip('ft232h')
-    ->rst(0)
-    ->dc(1)
-    ->busy(2)
-    ->create()
-```
-
-## Alternative Usage
-
-### Using Through the Display Library (as a black/white panel)
-```php
-use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\SSD1680;
-use RealityInterface\Displays\Applied\ePaper\BWePaperDisplay;
-
-$ssd1680 = SSD1680::connection('usb')
-    ->spi('ft232h', 0)
-    ->gpiochip('ft232h')
-    ->rst(0)
-    ->dc(1)
-    ->busy(2)
-    ->create()
-    
-$display = BWePaperDisplay::as($ssd1680);
-
-```
-
-### Using Through the Display Library (as a black/white/red panel)
-```php
-use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\SSD1680;
-use RealityInterface\Displays\Applied\ePaper\TriColorePaperDisplay;
-
-$ssd1680 = SSD1680::connection('usb')
-    ->spi('ft232h', 0)
-    ->gpiochip('ft232h')
-    ->rst(0)
-    ->dc(1)
-    ->busy(2)
-    ->create()
-    
-$display = TriColorePaperDisplay::as($ssd1680);
-
-```
-
-### Using Through the Display Framework (with an autoloaded config)
-```php
-
-use RealityInterface\Displays\Applied\ePaper\BWePaperDisplay;
-use RealityInterface\Displays\Applied\ePaper\TriColorePaperDisplay;
-
-$bw = BWePaperDisplay::using('ssd1680-usb');
-$bwr = TriColorePaperDisplay::using('ssd1680-usb');
-
-```
-
-Display API
-==========
-The setters in this API interface with the device directly (register writes), so
-you can use property access while still working against the panel itself.
-
-Readable Properties (Getters)
------------------------------
-There are no readable magic properties exposed for the SSD1680 in this package.
-
-Writable Properties (Setters)
------------------------------
-* `$display->data_entry_mode = SSD1680DataEntryMode::Y_INCREMENT_X_INCREMENT;`
-  Sets the RAM data entry (address auto-increment) direction.
-
-* `$display->border_waveform = new SSD1680BorderWaveform(...);`
-  Sets the border waveform control.
-
-* `$display->display_update_control = new SSD1680DisplayUpdateControl1(...);`
-  Sets the display update control (RAM-to-panel mapping for each plane).
-
-* `$display->temperature_sensor = SSD1680TemperatureSensor::INTERNAL;`
-  Selects the temperature sensor source used for the refresh waveform.
-
-* `$display->deep_sleep = true;`
-  Drops the controller into deep sleep. A hardware reset is required to wake it.
-
-Drawing on the Display
-============
-Draw with a `Screen`, which wraps a `GFXRenderer` over a `ChannelSortedFrameBuffer`
-matched to the panel's `FormatSpec`, then ships the bytes on `render()`. ePaper is
-a single slow full refresh, so paint one complete composition and render once.
-
-Colors are `EInkColor` cases. On a black/white panel use `WHITE` and `BLACK`; on a
-black/white/red panel `RED` is also available and lands on its own RAM plane.
+`conjure('ssd1680-bw')` reads `circuits.ssd1680-bw`, picks `default_config`, and calls `SSD1680BW::spi()` with that entry's keys. You can call the factory directly too:
 
 ```php
-use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680\SSD1680;
-use Microscrap\GFX\PhpdaFruit\GFXRenderer;
-use RealityInterface\Displays\Applied\ePaper\Buffers\ChannelSortedFrameBuffer;
-use RealityInterface\Displays\Applied\ePaper\Enums\EInkColor;
-use RealityInterface\Displays\Applied\ePaper\TriColorePaperDisplay;
-use RealityInterface\Displays\Screen;
+use DeptOfScrapyardRobotics\Displays\SSD1680\SSD1680BW;
 
-$ssd1680 = SSD1680::connection('usb')
-    ->spi('ft232h', 0)
-    ->gpiochip('ft232h')
-    ->rst(0)
-    ->dc(1)
-    ->busy(2)
-    ->create();
-
-$display = TriColorePaperDisplay::as($ssd1680);
-
-$buffer = new ChannelSortedFrameBuffer($display->width(), $display->height(), $display->getFormatSpec());
-$screen = new Screen($display, new GFXRenderer($buffer));
-
-$screen
-    ->fill(EInkColor::WHITE->value)
-    ->drawRect(0, 0, $display->width(), $display->height(), EInkColor::BLACK->value)
-    ->setTextColor(EInkColor::BLACK->value)
-    ->setCursor(8, 20)
-    ->print('SSD1680')
-    ->setTextColor(EInkColor::RED->value)
-    ->setCursor(8, 40)
-    ->print('B/W/R')
-    ->render();
+$panel = SSD1680BW::spi(
+    'native', 0,
+    dc: ['driver' => 'native', 'device' => 0, 'pin' => 25],
+    rst: ['driver' => 'native', 'device' => 0, 'pin' => 17],
+    busy: ['driver' => 'native', 'device' => 0, 'pin' => 24],
+    pwr: ['enabled' => true, 'driver' => 'native', 'device' => 0, 'pin' => 18],
+);
 ```
+
+The factory opens an unconnected bus in `mode` (0 by default) and refuses a bus your app already opened in a different mode. It clocks this chip select at `speed`, 10 MHz by default and at most 20 MHz, the controller's limit. DC, RST, BUSY and PWR are opened after the bus, so on an FT232H they ride the same USB context as its SPI engine. Leave `pwr` disabled when the panel has no power switch. Pass `width` and `height` for a panel other than 122 × 250 (up to 176 × 296), and `boot_now: false` to build without booting.
+
+### Building the transport yourself
+
+```php
+use DeptOfScrapyardRobotics\Displays\SSD1680\Transports\SSD1680SPITransport;
+
+$spi = app('gpio.spi')->driver('native')->connectTo(0)->mode(0)->speed(10_000_000)->register()->device(0, 0);
+$pins = app('gpio.digital')->driver('native')->connectTo(0)->register();
+
+$panel = new SSD1680BW(
+    new SSD1680SPITransport($spi, $pins->output(0, 25), $pins->output(0, 17), $pins->input(0, 24), $pins->output(0, 18)),
+    boot_now: true,
+);
+```
+
+## Drawing
+
+Each ink is a one-bit plane, eight pixels to a byte with the leftmost in bit 7, rows padded to a whole byte. On the black/white panel `1` is white and `0` is black. The black/white/red panel takes two planes back to back: black (1 white, 0 black) then red (1 red).
+
+`transmit($x, $y, $bytes, $width, $height)` writes a window into the controller's RAM. The panel doesn't change until you call `refresh()`. RAM columns are bytes, so `$x` is a multiple of 8, and the width is a multiple of 8 unless the window ends at the panel's right edge:
+
+```php
+use Surface\Contracts\Framebuffers\Region;
+
+$fb->writeRgba8($square_rgba, 24, 24, 48, 100);
+$region = new Region(48, 100, 24, 24);
+
+$panel->transmit($region->x, $region->y, $fb->flushRegion($region, $spec, true), $region->width, $region->height);
+```
+
+## Refreshing
+
+```php
+use GeneralPurposeIO\Contracts\IntegratedCircuits\RefreshMode;
+
+$panel->refresh();                       // full: about 2.3 s, the whole panel flashes
+$panel->refresh(RefreshMode::PARTIAL);   // black/white only: about 0.6 s, only changed pixels move
+```
+
+A partial refresh moves only the pixels that differ from the frame the panel is showing. The controller keeps that frame in its red RAM, so after every refresh the black/white panel copies the windows you sent into it. Run a full refresh after boot before the first partial one, and send the whole panel for that first full refresh, so the red RAM starts out matching the screen; a partial refresh before any full one throws. A full refresh that follows partial ones re-runs the controller's reset and register setup first (RAM is kept), as the panel vendor does; without it the panel ignores the full refresh.
+
+ePaper panels last longer if you don't refresh partially forever; run a full refresh now and then.
+
+The black/white/red panel has no partial waveform: `refresh(RefreshMode::PARTIAL)` throws there.
+
+Every refresh blocks until the panel lowers BUSY. If BUSY stays high past `busy_timeout_ms` (30 s by default; a black/white/red full refresh takes about 15 s), it throws.
+
+## Sleep
+
+```php
+$panel->sleep();     // deep sleep; the image stays on the panel
+$panel->boot();      // wakes it with a hardware reset and sets it up again
+```
+
+## Configuration object
+
+`SSD1680Configuration` holds the geometry and the values boot writes. Every argument is optional.
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `width`, `height` | `122`, `250` | panel size along sources and gates, up to 176 × 296 |
+| `gate_setting` | `0` | gate scan setting: bit 2 bottom to top, bit 1 interlaced, bit 0 first gate |
+| `border_waveform` | `new SSD1680BorderWaveform` | border during full refreshes (`0x05`) |
+| `display_update_control` | `new SSD1680DisplayUpdateControl1` | RAM content option and source output (`0x00 0x80`) |
+| `temperature_sensor` | `SSD1680TemperatureSensor::INTERNAL` | where the waveform's temperature comes from |
+| `max_packet_size` | `4096` | largest data write, in bytes |
+| `busy_timeout_ms` | `30000` | longest a command or refresh may hold BUSY |
+
+Every register breakout checks its fields and throws on a value out of range.
+
+## Settings
+
+```php
+use DeptOfScrapyardRobotics\Displays\SSD1680\Enums\SSD1680TemperatureSensor;
+
+$panel->temperature_sensor = SSD1680TemperatureSensor::EXTERNAL;
+$panel->border_waveform = new SSD1680BorderWaveform(vbd_option: 0b01, fixed_level: 0b01, gs_transition_control: false, gs_transition_setting: 0);
+```
+
+Any configuration key reads as a property. `border_waveform`, `display_update_control` and `temperature_sensor` can be written, and the panel gets them straight away. The same setters are methods, as are `setRAMWindow()`, `setRAMCursor()`, `runUpdate()`, `softwareReset()` and `waitUntilIdle()`.
+
+## Errors
+
+Everything throws `SSD1680Exception`, which descends from `GeneralPurposeIO\Contracts\IntegratedCircuits\CircuitException`.
+
+| Factory | When |
+|---|---|
+| `busyTimeout` | BUSY stays high past `busy_timeout_ms` |
+| `spiWriteFailed` | the bus wrote fewer bytes than asked |
+| `windowOutsidePanel`, `unalignedWindow`, `wrongByteCount` | a `transmit()` window that doesn't fit the RAM |
+| `partialBeforeFull` | a partial refresh before the first full one after boot |
+| `unsupportedRefreshMode` | a partial refresh on the black/white/red panel |
+| `invalidGeometry` | a panel larger than 176 × 296 |
+| `invalidRegisterValue` | a register field out of range |
+| `notConnected`, `incompletePin` | no bus or pin from the driver, or a pin config missing a key |
+| `invalidSpiMode`, `spiClockOutOfRange`, `wrongSpiMode` | SPI settings the panel can't use |
+| `invalidProperty` | an unknown property or configuration key |
+
+SPI has no acknowledge, so a missing panel shows up as a BUSY timeout rather than a write error.
+
+## Closing
+
+```php
+$panel->close();
+```
+
+`close()` releases DC, RST, BUSY and PWR. The SPI connection belongs to its driver and stays open for other chips. The panel keeps showing its last image.
+
+## Configuration files
+
+`config/circuits/ssd1680-bw.php` and `ssd1680-bwr.php` share this shape:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `default_config` | `'spi'` | which entry under `configs` `conjure()` uses |
+| `configs.spi.driver` | `'none'` | SPI adapter: `native` or `usb` |
+| `configs.spi.device` | `''` | SPI bus number, or `ft232h` |
+| `configs.spi.chip_select` | `0` | chip select |
+| `configs.spi.mode` | `0` | SPI mode |
+| `configs.spi.speed` | `10_000_000` | this chip select's clock in Hz, up to 20 MHz |
+| `configs.spi.width` / `height` | `null` | panel size; null keeps 122 × 250 |
+| `configs.spi.dc` / `rst` / `busy` | pins 0 / 1 / 2 | `driver`, `device`, `pin` |
+| `configs.spi.pwr` | disabled, pin 3 | `enabled`, `driver`, `device`, `pin` |
+| `configs.*.boot_now` | `true` | boot during `conjure()` |
+
+## Testing
+
+```bash
+composer install
+vendor/bin/pest
+```
+
+The suite runs against recording fakes of the SPI bus, the pins and a scripted BUSY line, so it needs no hardware. Both variants were also exercised on a Raspberry Pi 5 for this release, with someone watching. A LAFVIN 2.13 inch black/white HAT ran full refreshes in about 2.3 seconds, partial refreshes adding squares in about 0.6 seconds without a flash, and a full refresh clearing the panel after them. A Waveshare 2.13 inch e-Paper HAT (B) V4, black/white/red on the same pins, showed a black border and X with two red squares after an 18-second full refresh.
+
+## Security
+
+The driver writes commands and image data to hardware the PHP process can open. See [SECURITY.md](SECURITY.md) for the support policy and how to report a vulnerability.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
